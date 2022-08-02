@@ -57,18 +57,22 @@ def worker(queue, result, settings):
 
 def analyze_file(_file, result, settings):
     try:
-        bad_expressions = settings.bad_expressions if settings.bad_expressions else BAD_EXPRESSIONS
-        if bad_expressions:
-            if bad_expression_verifier(_file, bad_expressions):
-                logger.info("Bad expression has been found in a " + _file 
-                    + " file. Skipping further analysis.")
-                return
+        bad_expressions = settings.bad_expressions or BAD_EXPRESSIONS
+        if bad_expressions and bad_expression_verifier(_file, bad_expressions):
+            logger.info(
+                (
+                    f"Bad expression has been found in a {_file}"
+                    + " file. Skipping further analysis."
+                )
+            )
+
+            return
 
         entropy_found = False
         rule_triggerred = False
-        min_key = settings.min_key if settings.min_key else MIN_KEY_LENGTH
-        max_key = settings.max_key if settings.max_key else MAX_KEY_LENGTH
-        entropy = settings.entropy if settings.entropy else HIGH_ENTROPY_EDGE
+        min_key = settings.min_key or MIN_KEY_LENGTH
+        max_key = settings.max_key or MAX_KEY_LENGTH
+        entropy = settings.entropy or HIGH_ENTROPY_EDGE
 
         if settings.advance:
             additional_checks = advancedSearch.AdvancedSearch()
@@ -76,9 +80,10 @@ def analyze_file(_file, result, settings):
 
             for word in get_all_strings_from_file(_file):
                 additional_checks.grepper(word)
-                if is_base64_with_correct_length(word, min_key, max_key):
-                    if found_high_entropy(_file, word, result, entropy):
-                        entropy_found = True
+                if is_base64_with_correct_length(
+                    word, min_key, max_key
+                ) and found_high_entropy(_file, word, result, entropy):
+                    entropy_found = True
 
             if additional_checks.final(_file):
                 data = {"Finding": "Advanced rule triggerred", "File": _file,
@@ -88,7 +93,7 @@ def analyze_file(_file, result, settings):
                                     "grep_word_occurrence": additional_checks._GREP_WORD_OCCURRENCE,
                                     "grep_words_weight": additional_checks._GREP_WORDS_WEIGHT}}
                 result.put(data)
-        
+
         for word in get_base64_strings_from_file(_file, min_key, max_key):
             if found_high_entropy(_file, word, result, entropy):
                 entropy_found = True
@@ -101,23 +106,32 @@ def analyze_file(_file, result, settings):
                     for line in f:
                         for password in password_search(line, settings):
                             print(colored("FOUND POTENTIAL PASSWORD!!!", 'yellow'))
-                            print(colored("Potential password ", 'yellow') + colored(password[0], 'magenta')
-                                    + colored(" has been found in file " + _file, 'yellow'))
+                            print(
+                                (
+                                    colored("Potential password ", 'yellow')
+                                    + colored(password[0], 'magenta')
+                                    + colored(
+                                        f" has been found in file {_file}",
+                                        'yellow',
+                                    )
+                                )
+                            )
+
                             data = {"Finding": "Password",
                                     "File": _file,
                                     "Details": {"Password complexity": password[1],
                                                 "String": password[0]}}
                             result.put(data)
-                            logger.info("potential password has been found in a file " + _file)
+                            logger.info(f"potential password has been found in a file {_file}")
 
             except Exception as e:
-                logger.error("while trying to open " + str(_file) + ". Details:\n" + str(e))
+                logger.error(f"while trying to open {str(_file)}" + ". Details:\n" + str(e))
 
-        if settings.remove and not (entropy_found or rule_triggerred):
+        if settings.remove and not entropy_found and not rule_triggerred:
             remove_file(_file)
 
     except Exception as e:
-        logger.error("while trying to analyze " + str(_file) + ". Details:\n" + str(e))
+        logger.error(f"while trying to analyze {str(_file)}" + ". Details:\n" + str(e))
 
 
 def found_high_entropy(_file, word, result, entropy):
@@ -125,11 +139,16 @@ def found_high_entropy(_file, word, result, entropy):
 
     if (b64Entropy > entropy) and false_positive_filter(word):
         print(colored("FOUND HIGH ENTROPY!!!", 'green'))
-        print(colored("The following string: ", 'green')
-              + colored(word, 'magenta')
-              + colored(" has been found in " + _file, 'green'))
+        print(
+            (
+                colored("The following string: ", 'green')
+                + colored(word, 'magenta')
+                + colored(f" has been found in {_file}", 'green')
+            )
+        )
+
         print()
-        logger.info("high entropy has been found in a file " + _file)
+        logger.info(f"high entropy has been found in a file {_file}")
         data = {"Finding": "High entropy", "File": _file,
                 "Details": {"Entropy": b64Entropy,
                             "String": word}}
@@ -161,9 +180,8 @@ def get_base64_strings_from_file(_file, min_length, max_length):
 
 def get_all_strings_from_file(_file):
     with open(_file, 'r') as open_file:
-        for line in open_file.readlines():
-            for word in line.split():
-                yield word
+        for line in open_file:
+            yield from line.split()
 
 
 def is_base64_with_correct_length(word, min_length, max_length):
@@ -184,23 +202,23 @@ def file_reader(queue, settings):
 
 def folder_reader(queue, settings):
     try:
-        excluded_files = settings.exclude_files if settings.exclude_files else EXCLUDED_FILES
+        excluded_files = settings.exclude_files or EXCLUDED_FILES
 
         for root, subfolder, files in os.walk(settings.local_path):
             for filename in files:
 
                 extension = get_file_extension(filename)
-                _file = root + '/' + filename
+                _file = f'{root}/{filename}'
 
                 # check if it is archive
                 if filename in excluded_files or extension in excluded_files:
                     # remove unnecessary files
                     if settings.remove:
-                        _file = root + '/' + filename
+                        _file = f'{root}/{filename}'
                         remove_file(_file)
 
                 elif extension in ARCHIVE_TYPES:
-                    archive = root + '/' + filename
+                    archive = f'{root}/{filename}'
                     extract_path = get_unique_extract_path()
                     extract_archive(archive, extract_path)
                     folder_reader(extract_path, queue)
@@ -210,9 +228,7 @@ def folder_reader(queue, settings):
                         with open(_file, 'rb') as f:
                             # reading 16 magic bits to recognize VAX COFF
                             if f.read(2) == b'x\x01':
-                                decompressed = git_object_reader(_file)
-
-                                if decompressed:
+                                if decompressed := git_object_reader(_file):
                                     queue.put(decompressed)
 
                     except Exception as e:
@@ -230,7 +246,7 @@ def get_file_extension(filename):
 
 
 def get_unique_extract_path():
-    return os.getcwd() + '/Extracted_files/' + str(time.time())
+    return f'{os.getcwd()}/Extracted_files/{str(time.time())}'
 
 
 def remove_file(_file):
@@ -253,7 +269,7 @@ def extract_archive(archive_file, path):
             opener, mode = tarfile.open, 'r:bz2'
 
         else:
-            logger.info("Extracting archive " + archive_file + " is not supported.")
+            logger.info(f"Extracting archive {archive_file} is not supported.")
             return
 
         with opener(archive_file, mode) as archive:
@@ -301,7 +317,7 @@ def git_object_reader(_file):
     try:
         git_object = open(_file, 'rb').read()
         decompressed = zlib.decompress(git_object)
-        new_file = _file + '_decompressed'
+        new_file = f'{_file}_decompressed'
 
         with open(new_file, 'w') as decompressed_file:
             decompressed_file.write(str(decompressed))
@@ -318,21 +334,25 @@ def save_output(result, settings):
 
         while not result.empty():
             data.append(result.get())
-            
+
         with open(settings.outfile, 'w') as f:
             json.dump(data, f)
 
     except Exception as e:
-        logger.error("while trying to write to " + str(settings.outfile) + " file. Details:\n" + str(e))
+        logger.error(
+            f"while trying to write to {str(settings.outfile)}"
+            + " file. Details:\n"
+            + str(e)
+        )
 
 
 def password_search(line, settings):
     try:
         potential_pass_list = re.findall(PASSWORD_REGEX, line)
         pass_list = []
-        min_pass = settings.min_pass if settings.min_pass else MIN_PASS_LENGTH
-        max_pass = settings.max_pass if settings.max_pass else MAX_PASS_LENGTH
-        password_complexity_edge = settings.password_complexity if settings.password_complexity else PASSWORD_COMPLEXITY
+        min_pass = settings.min_pass or MIN_PASS_LENGTH
+        max_pass = settings.max_pass or MAX_PASS_LENGTH
+        password_complexity_edge = settings.password_complexity or PASSWORD_COMPLEXITY
 
         for string in potential_pass_list:
             if (not min_pass <= len(string) <= max_pass) or any(ch.isspace() for ch in string):
@@ -357,10 +377,7 @@ def false_positive_filter(word):
 
 
 def has_whitespace(string):
-    for s in string:
-        if s.isspace():
-            return True
-    return False
+    return any(s.isspace() for s in string)
 
 
 def digit_verifier(word):
@@ -381,5 +398,7 @@ def bad_expression_verifier(_file, bad_expressions):
                     return True          
 
     except Exception as e:
-        logger.error("while trying to open " + str(_file) + " file. Details:\n" + str(e))
+        logger.error(
+            f"while trying to open {str(_file)}" + " file. Details:\n" + str(e)
+        )
 

@@ -29,7 +29,7 @@ def opening():
                       /_/                                                 
             """
     creds = "                                                       #Coded by @Rzepsky"
-    
+
     print(colored(title, 'magenta') )
     print(colored(creds, 'red') )
     print()

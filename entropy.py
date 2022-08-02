@@ -27,7 +27,7 @@ def shannon_entropy(data):
         return entropy
 
     except Exception as e:
-        print("Error: " + str(e))
+        print(f"Error: {str(e)}")
 
 
 if __name__ == '__main__':

@@ -46,14 +46,12 @@ class AdvancedSearch(object):
 
 
     def final(self, _file):
-        if self._FINAL_WEIGHT >= 10:
-          
-            print(colored("INTERESTING FILE HAS BEEN FOUND!!!", 'cyan'))
-            print(colored("The rule defined in 'rules.yaml' file has been "
-                  + "triggerred. Checkout the file " + _file, 'cyan'))
-            core.logger.info("the rule defined in 'rules.yaml' file has been "
-                     + "triggerred while analyzing file " + _file)
-            
-            return True
-        else:
+        if self._FINAL_WEIGHT < 10:
             return False
+        print(colored("INTERESTING FILE HAS BEEN FOUND!!!", 'cyan'))
+        print(colored("The rule defined in 'rules.yaml' file has been "
+              + "triggerred. Checkout the file " + _file, 'cyan'))
+        core.logger.info("the rule defined in 'rules.yaml' file has been "
+                 + "triggerred while analyzing file " + _file)
+
+        return True
